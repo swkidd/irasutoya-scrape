@@ -1,0 +1,210 @@
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Irasutoya Images</title>
+    <style>
+        html,
+        body {
+            height: 100%;
+            background-color: rgba(42, 42, 46, 1);
+            font-family: "ヒラギノ角ゴ Pro W3", "Hiragino Kaku Gothic Pro", Osaka, "メイリオ", Meiryo, "ＭＳ Ｐゴシック", "MS PGothic", sans-serif;
+        }
+
+        .container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #images {
+            position: relative;
+            top: -50px;
+            margin-bottom: -50px;
+            width: 100%;
+            display: grid;
+            grid-template-columns: 100%;
+            place-items: center;
+        }
+
+        #post {
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 99;
+            max-width: 280px;
+            border-radius: 5px;
+            box-shadow: -1px 15px 30px -12px black;
+            padding: 5px;
+            background-color: rgb(69, 69, 82);
+        }
+
+        #post:before {
+            background-color: green;
+            display: block;
+            height: 100%;
+            width: 100%;
+            content: '';
+        }
+
+        #title,
+        #text {
+            text-align: center;
+            color: white;
+        }
+
+        #title {
+            font-weight: bold;
+            letter-spacing: 1.5px;
+        }
+
+        .hide {
+            display: none;
+        }
+
+        #post-number {
+            font-size: 2em;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="post" class="hide">
+        <div id="images"></div>
+        <h3 id="title"></h3>
+        <p id="text"></p>
+        <button id="change-image" style="display: none;">*</button>
+    </div>
+    <div id="post-number"></div>
+    <div class="container">
+        <div id="all-images"></div>
+    </div>
+    <div style="color: white; word-break: break-all;">all images copyright <a
+            href="https://www.irasutoya.com">irasutoya</a> (not affiliated)</div>
+    <script>
+
+        function include(filename, onload) {
+            var head = document.getElementsByTagName('head')[0];
+
+            var script = document.createElement('script');
+            script.id = 'post-script';
+            script.src = filename;
+            script.onload = onload;
+            script.type = 'text/javascript';
+
+            const postScript = head.querySelector('#post-script')
+            if (postScript) {
+                head.replaceChild(script, postScript)
+            } else {
+                head.appendChild(script)
+            }
+        }
+
+        const set_token = (element, tokens) => {
+            for (let token of tokens) {
+                const span = document.createElement('span')
+                span.innerText = token['text']
+                if (token.def) {
+                    span.addEventListener('click', () => alert(token.def))
+                }
+                element.append(span)
+            }
+        }
+
+        const set_post = post => {
+            document.getElementById('post').classList.remove('hide')
+            const title = document.getElementById('title')
+            title.innerHTML = ''
+            const text = document.getElementById('text')
+            text.innerHTML = ''
+            const images = document.getElementById('images')
+            images.innerHTML = ''
+            const changeImg = document.getElementById('change-image')
+            changeImg.setAttribute('data-index', 0)
+
+            set_token(title, post['title_parsed'])
+
+            const urls = post['url']
+            if (urls.length == 1) {
+                changeImg.style['display'] = 'none'
+                const img = document.createElement('img')
+                img.src = urls[0]
+                img.onload = () => {
+                    images.append(img)
+                }
+            } else {
+                changeImg.style['display'] = 'block'
+                changeImg.addEventListener('click', () => {
+                    images.innerHTML = ''
+                    const img = document.createElement('img')
+                    const index = (parseInt(changeImg.getAttribute('data-index')) + 1) % urls.length
+                    changeImg.setAttribute('data-index', index)
+                    img.src = urls[index]
+                    img.onload = () => {
+                        images.append(img)
+                    }
+                })
+                const img = document.createElement('img')
+                img.src = urls[0]
+                img.onload = () => {
+                    images.append(img)
+                }
+            }
+            set_token(text, post['text_parsed'])
+        }
+
+        function closePost(e) {
+            document.body.removeEventListener('click', closePost);
+            document.getElementById('post').classList.add('hide')
+            e.stopPropagation()
+        }
+
+        document.getElementById('post').addEventListener('click', e => e.stopPropagation())
+
+        const pull_rand = () => {
+            const rand_block = Math.floor(Math.random() * 90)
+            document.getElementById('post-number').innerText = rand_block
+            include(`posts/posts${rand_block}.js`, () => {
+                const allImages = document.getElementById('all-images')
+                for (let post of posts) {
+                    const url_promises = post['url'].map(u => new Promise(resolve => {
+                        const img = document.createElement('img')
+                        img.src = u
+                        img.onload = () => resolve({ url: u, width: img.width, height: img.height })
+                    }))
+
+                    const _ = (async () => {
+                        const urls = (await Promise.all(url_promises))
+                            .filter(a => a.width > 1)
+                            .map(a => a.url)
+
+                        post['url'] = urls
+
+                        const img = document.createElement('img')
+                        img.src = urls[0]
+                        img.onload = () => {
+                            img.style.width = "100px"
+                            img.style.height = "100px"
+                            img.style["object-fit"] = "contain"
+                            allImages.append(img)
+                        }
+                        img.addEventListener('click', e => {
+                            if (!document.getElementById('post').classList.contains('hide')) return
+                            set_post(post)
+                            document.body.addEventListener('click', closePost)
+                            e.stopPropagation()
+                        })
+                    })()
+                }
+            })
+        }
+
+        pull_rand()
+    </script>
+</body>
+
+</html>
